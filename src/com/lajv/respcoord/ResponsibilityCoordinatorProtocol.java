@@ -20,11 +20,12 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 	/*
 	 * Variables for streaming statistics
 	 */
-	private int segmentsFromServer;
-	private int segmentsFromPeers;
-	private int requestsToPeers;
-	private int cacheHits;
-	private int cacheMisses;
+	private int segmentsResponsible = 0;
+	private int segmentsFallback = 0;
+	private int segmentsFromPeers = 0;
+	private int requestsToPeers = 0;
+	private int cacheHits = 0;
+	private int cacheMisses = 0;
 
 	private int currentSegment;
 	private HashMap<Integer, Decision> decisions;
@@ -61,8 +62,7 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 	public void nextCycle(Node node, int protocolID) {
 		// System.err.println("ResponsibilityCoordinatorProtocol: " + node.getID()
 		// + " calculating resp for segment " + segment);
-
-		boolean fetched = false;
+		currentSegment++;
 
 		if (peers == null) {
 			int closePeerPid = Configuration.getPid(prefix + "." + CLOSEPEER_PROT);
@@ -71,55 +71,57 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 		}
 
 		Decision calculatedDecision;
+		LinkedList<NodeWrapper> responsiblePeers;
 
 		if (decisions.containsKey(currentSegment)) {
 			calculatedDecision = decisions.get(currentSegment);
+			responsiblePeers = calculatedDecision.getResponsiblePeers();
+
 		} else {
 			calculatedDecision = calculateResponsibility(node, currentSegment);
 			decisions.put(currentSegment, calculatedDecision);
+			responsiblePeers = calculatedDecision.getResponsiblePeers();
 		}
 
-		LinkedList<NodeWrapper> responsiblePeers = calculatedDecision.getResponsiblePeers();
+		for (NodeWrapper n : responsiblePeers) {
+			if (n.node == node) {
+				segmentsResponsible++;
+				return;
+			}
+		}
 
 		while (!responsiblePeers.isEmpty()) {
 			double randRespValue = CommonState.r.nextDouble()
 					* responsiblePeers.getLast().responsibilityValue;
-			NodeWrapper selected = null;
+			NodeWrapper selectedPeer = null;
 
 			for (NodeWrapper n : responsiblePeers) {
 				if (randRespValue <= n.responsibilityValue) {
-					selected = n;
+					selectedPeer = n;
 				}
 			}
+			responsiblePeers.remove(selectedPeer);
 
-			ResponsibilityCoordinatorProtocol responsiblePeer = (ResponsibilityCoordinatorProtocol) selected.node
+			ResponsibilityCoordinatorProtocol responsiblePeerProtocol = (ResponsibilityCoordinatorProtocol) selectedPeer.node
 					.getProtocol(protocolID);
 
-			if (responsiblePeer.fetchSegment(selected.node, currentSegment)) {
-				if (!fetched) {
-					segmentsFromPeers++;
-					requestsToPeers++;
-					// System.err.println(node.getID() + " HIT");
-				}
+			requestsToPeers++;
+
+			if (responsiblePeerProtocol.fetchSegment(selectedPeer.node, currentSegment)) {
+				segmentsFromPeers++;
 				cacheHits++;
-				fetched = true;
-				break;
+				// System.err.println(node.getID() + " HIT");
+				return;
 			} else {
 				cacheMisses++;
-				requestsToPeers++;
+				// System.err.println(node.getID() + " MISS");
 			}
 
-			responsiblePeers.remove(selected);
 			calculateRespValue(responsiblePeers);
-
 		}
 
-		if (!fetched) {
-			segmentsFromServer++;
-			// System.err.println(node.getID() + " MISS");
-		}
-
-		currentSegment++;
+		// Fallback
+		segmentsFallback++;
 	}
 
 	public boolean fetchSegment(Node node, int segmentNum) {
@@ -128,10 +130,12 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 			ClosePeerProtocol closePeerProt = (ClosePeerProtocol) node.getProtocol(closePeerPid);
 			peers = closePeerProt.getPeers();
 		}
+
 		Decision calculatedDecision;
 
 		if (decisions.containsKey(segmentNum)) {
 			calculatedDecision = decisions.get(segmentNum);
+
 		} else {
 			calculatedDecision = calculateResponsibility(node, currentSegment);
 			decisions.put(segmentNum, calculatedDecision);
@@ -142,6 +146,7 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -189,7 +194,7 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 					totalUploadCapacity += n.uploadCapacity;
 					requiredUploadCapacity -= bitrate;
 					responsiblePeers.add(n);
-					if (n.uploadCapacity > superPeerLimit)
+					if (n.uploadCapacity >= superPeerLimit)
 						n.superPeer = true;
 					else
 						n.superPeer = false;
@@ -214,7 +219,7 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 		// }
 
 		// Sort resp peers
-		Collections.sort(responsiblePeers, new UploadCapacityComparator());
+		// Collections.sort(responsiblePeers, new UploadCapacityComparator());
 
 		// Calculate resp value
 		calculateRespValue(responsiblePeers);
@@ -225,8 +230,12 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 				superPeerLimit, totalUploadCapacity, requiredUploadCapacity);
 	}
 
-	public int getSegmentsFromServer() {
-		return segmentsFromServer;
+	public int getSegmentsResponsible() {
+		return segmentsResponsible;
+	}
+
+	public int getSegmentsFallback() {
+		return segmentsFallback;
 	}
 
 	public int getSegmentsFromPeers() {

@@ -1,5 +1,7 @@
 package com.lajv.respcoord;
 
+import java.text.DecimalFormat;
+
 import com.lajv.NetworkNode;
 
 import peersim.config.Configuration;
@@ -33,7 +35,8 @@ public class StreamingObserver implements Control {
 		int pid = Configuration.lookupPid(RESPCOORD_PROT);
 		int numPeers = Network.size();
 
-		double segmentsFromServerTotal = 0;
+		double segmentsResponsibleTotal = 0;
+		double segmentsFallbackTotal = 0;
 		double segmentsFromPeersTotal = 0;
 		double requestsToPeersTotal = 0;
 		double cacheHitsTotal = 0;
@@ -45,7 +48,8 @@ public class StreamingObserver implements Control {
 			ResponsibilityCoordinatorProtocol rcp = (ResponsibilityCoordinatorProtocol) n
 					.getProtocol(pid);
 
-			segmentsFromServerTotal += rcp.getSegmentsFromServer();
+			segmentsResponsibleTotal += rcp.getSegmentsResponsible();
+			segmentsFallbackTotal += rcp.getSegmentsFallback();
 			segmentsFromPeersTotal += rcp.getSegmentsFromPeers();
 			requestsToPeersTotal += rcp.getRequestsToPeers();
 			cacheHitsTotal += rcp.getCacheHits();
@@ -53,19 +57,28 @@ public class StreamingObserver implements Control {
 
 		}
 
+		DecimalFormat df = new DecimalFormat("0.0");
+
+		double offloadFromServer = (segmentsFromPeersTotal / (segmentsResponsibleTotal
+				+ segmentsFallbackTotal + segmentsFromPeersTotal));
+
+		double segmentsFetchedFromServer = segmentsResponsibleTotal + segmentsFallbackTotal;
+
 		System.out.println("#########################" + numPeers
 				+ "###############################");
-		System.err
-				.println("Offload from server:\t\t"
-						+ (float) ((segmentsFromPeersTotal / (segmentsFromServerTotal + segmentsFromPeersTotal)) * 100)
-						+ " %");
-		System.err.println("segmentsFromServerTotal:\t" + segmentsFromServerTotal);
-		System.err.println("segmentsFromPeersTotal:\t" + segmentsFromPeersTotal);
-		System.err.println("requestsToPeersTotal:\t" + requestsToPeersTotal);
-		System.err.println("cacheHitsTotal:\t\t" + (cacheHitsTotal));
-		System.err.println("cacheMissesTotal:\t\t" + (cacheMissesTotal));
-		System.err.println("Requests to peers to get a segment on avg:\t\t" + requestsToPeersTotal
-				/ cacheMissesTotal);
-	}
 
+		System.err.println("Offload from server:\t\t" + df.format(offloadFromServer * 100) + " %");
+
+		// System.err.println("Segments from server:\t\t" + segmentsFetchedFromServer);
+		System.err.println("Segments from server");
+		System.err.println("\tResponsible:\t\t"
+				+ df.format((segmentsResponsibleTotal / segmentsFetchedFromServer) * 100) + "%");
+		System.err.println("\tFallback:\t\t"
+				+ df.format((segmentsFallbackTotal / segmentsFetchedFromServer) * 100) + "%");
+		// System.err.println("requestsToPeersTotal:\t\t" + requestsToPeersTotal);
+		// System.err.println("cacheHitsTotal:\t\t\t" + (cacheHitsTotal));
+		// System.err.println("cacheMissesTotal:\t\t" + (cacheMissesTotal));
+		System.err.println("Requests until hit avg:\t\t"
+				+ df.format((requestsToPeersTotal / cacheMissesTotal)));
+	}
 }
