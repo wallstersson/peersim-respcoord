@@ -15,13 +15,13 @@ import peersim.core.CommonState;
 import peersim.core.Control;
 import peersim.core.Network;
 
-public class CacheObserver implements Control {
+public class ClosePeerObserver implements Control {
 
 	private static final String CLOSEPEER_PROT = "cpp";
 
 	private String prefix;
 
-	public CacheObserver(String prefix) {
+	public ClosePeerObserver(String prefix) {
 		this.prefix = prefix;
 		System.err.println(prefix);
 	}
