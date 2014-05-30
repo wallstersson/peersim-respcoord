@@ -12,18 +12,31 @@ import peersim.core.Network;
 public class StreamingObserver implements Control {
 
 	private static final String RESPCOORD_PROT = "respcoord";
+	
+	/**
+	 * The cycle in which printing starts
+	 * 
+	 * @config
+	 */
+	private static final String PAR_START_CYLE = "start_cycle";
 
 	private String prefix;
+	
+	private final int start_cycle;
 
 	public StreamingObserver(String prefix) {
 		this.prefix = prefix;
 		System.err.println(prefix);
+		start_cycle = Configuration.getInt(prefix + "." + PAR_START_CYLE, 0);
 	}
 
 	@Override
 	public boolean execute() {
 
 		if (CommonState.getTime() == 0)
+			return false;
+		
+		if (CommonState.getTime() < start_cycle)
 			return false;
 
 		printSegmentLists();
@@ -45,7 +58,7 @@ public class StreamingObserver implements Control {
 		for (int i = 0; i < numPeers; i++) {
 
 			NetworkNode n = (NetworkNode) Network.get(i);
-			ResponsibilityCoordinatorProtocol rcp = (ResponsibilityCoordinatorProtocol) n
+			ResponsibilityCoordinationProtocol rcp = (ResponsibilityCoordinationProtocol) n
 					.getProtocol(pid);
 
 			segmentsResponsibleTotal += rcp.getSegmentsResponsible();

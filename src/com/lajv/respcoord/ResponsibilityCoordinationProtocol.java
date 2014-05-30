@@ -1,6 +1,5 @@
 package com.lajv.respcoord;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -15,8 +14,15 @@ import peersim.config.Configuration;
 import peersim.core.CommonState;
 import peersim.core.Node;
 
-public class ResponsibilityCoordinatorProtocol implements CDProtocol {
+public class ResponsibilityCoordinationProtocol implements CDProtocol {
 
+	/**
+	 * The cycle in which printing starts
+	 * 
+	 * @config
+	 */
+	private static final String PAR_START_CYLE = "start_cycle";
+	
 	/*
 	 * Variables for streaming statistics
 	 */
@@ -34,22 +40,25 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 	private static final String CLOSEPEER_PROT = "closepeer_prot";
 
 	private String prefix;
+	
+	private final int start_cycle;
 
 	private static int bitrate = 1;
 	private static int highestRf = 16;
 
-	public ResponsibilityCoordinatorProtocol(String prefix) {
+	public ResponsibilityCoordinationProtocol(String prefix) {
 		this.prefix = prefix;
 		currentSegment = 0;
 		decisions = new HashMap<>();
+		start_cycle = Configuration.getInt(prefix + "." + PAR_START_CYLE, 0);
 	}
 
 	@Override
 	public Object clone() {
-		ResponsibilityCoordinatorProtocol rcp = null;
+		ResponsibilityCoordinationProtocol rcp = null;
 
 		try {
-			rcp = (ResponsibilityCoordinatorProtocol) super.clone();
+			rcp = (ResponsibilityCoordinationProtocol) super.clone();
 		} catch (CloneNotSupportedException e) {
 		} // never happens
 
@@ -63,6 +72,9 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 		// System.err.println("ResponsibilityCoordinatorProtocol: " + node.getID()
 		// + " calculating resp for segment " + segment);
 		currentSegment++;
+		
+		if (CommonState.getTime() < start_cycle)
+			return;
 
 		if (peers == null) {
 			int closePeerPid = Configuration.getPid(prefix + "." + CLOSEPEER_PROT);
@@ -102,7 +114,7 @@ public class ResponsibilityCoordinatorProtocol implements CDProtocol {
 			}
 			responsiblePeers.remove(selectedPeer);
 
-			ResponsibilityCoordinatorProtocol responsiblePeerProtocol = (ResponsibilityCoordinatorProtocol) selectedPeer.node
+			ResponsibilityCoordinationProtocol responsiblePeerProtocol = (ResponsibilityCoordinationProtocol) selectedPeer.node
 					.getProtocol(protocolID);
 
 			requestsToPeers++;
